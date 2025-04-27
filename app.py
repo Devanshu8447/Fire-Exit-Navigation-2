@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import random
 from queue import PriorityQueue
 
@@ -192,6 +192,26 @@ def path_to_directions(path, grid):
         room_name = grid[curr[0]][curr[1]] or "Empty Space"
         directions.append(f"Go {move} to {room_name}")
     return directions
+
+
+@app.route("/recalculate_path", methods=["POST"])
+def recalculate_path():
+    data = request.get_json()
+    start_room = data["start"]
+    fire_rooms = data["fire_rooms"]
+
+    start_pos = room_positions[start_room]
+    new_path = find_escape_path(grid, start_pos, room_positions, fire_rooms)
+    new_directions = path_to_directions(new_path, grid)
+
+    # Convert path (positions) to room names
+    path_room_names = []
+    for pos in new_path:
+        room_name = grid[pos[0]][pos[1]]
+        if room_name:
+            path_room_names.append(room_name)
+
+    return jsonify({"path": path_room_names, "directions": new_directions})
 
 
 if __name__ == "__main__":

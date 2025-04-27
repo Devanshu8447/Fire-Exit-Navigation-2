@@ -112,17 +112,19 @@
         const fireRooms = JSON.parse('{{ fire_rooms|tojson }}'.replace(/'/g, '"'));
         const directions = JSON.parse('{{ directions|tojson }}'.replace(/'/g, '"'));
         const roomPositions = {{ room_positions| tojson }};
+        const exitRooms = ["Lobby A", "Lobby B", "Office D"];
 
         function gridToMap(row, col) {
             return [-row * 0.001 + 0.005, col * 0.001];
         }
 
-        const exitRooms = ["Lobby A", "Lobby B", "Office D"]; // define your exits
+        const roomMarkers = {};
+        let escapePolyline = null;
+        let currentFireRooms = [...fireRooms];
 
         // Place all rooms with text labels
         for (const [roomName, position] of Object.entries(roomPositions)) {
             const coord = gridToMap(position[0], position[1]);
-
             let labelText = "";
             let labelColor = "";
 
@@ -143,20 +145,25 @@
                 labelColor = "gray";
             }
 
-            L.marker(coord, {
+            const marker = L.marker(coord, {
                 icon: L.divIcon({
-                    html: `<div style="color:${labelColor}; font-size:12px; font-weight:bold; text-align:center;">${labelText}</div>`,
+                    html: `<div id="label-${roomName.replace(/\s/g, '')}" style="color:${labelColor}; font-size:12px; font-weight:bold; text-align:center;">${labelText}</div>`,
                     className: '',
                     iconSize: [100, 24],
                     iconAnchor: [50, 12]
                 })
             }).addTo(map);
+
+            roomMarkers[roomName] = marker;
         }
 
-        // Build Escape Path
-        const pathCoords = [];
+        // Escape Path and Person Movement
+        let pathCoords = [];
+        let pathRooms = [];
+
         let currentPos = [...roomPositions[startRoom]];
         pathCoords.push(gridToMap(currentPos[0], currentPos[1]));
+        pathRooms.push(startRoom);
 
         directions.forEach(dir => {
             const move = dir.split(" ")[1];
@@ -165,11 +172,18 @@
             else if (move === "Left") currentPos[1]--;
             else if (move === "Right") currentPos[1]++;
             pathCoords.push(gridToMap(currentPos[0], currentPos[1]));
+
+            const roomName = Object.keys(roomPositions).find(name => {
+                const [r, c] = roomPositions[name];
+                return r === currentPos[0] && c === currentPos[1];
+            });
+            if (roomName) {
+                pathRooms.push(roomName);
+            }
         });
 
         if (pathCoords.length > 1) {
-            // Draw glowing path
-            L.polyline(pathCoords, {
+            escapePolyline = L.polyline(pathCoords, {
                 color: '#00FF00',
                 weight: 8,
                 opacity: 0.9,
@@ -177,9 +191,8 @@
             }).addTo(map);
             map.fitBounds(pathCoords);
 
-            // Smooth moving marker
             const personIcon = L.icon({
-                iconUrl: 'https://cdn-icons-png.flaticon.com/512/1946/1946429.png', // walking icon
+                iconUrl: 'https://cdn-icons-png.flaticon.com/512/1946/1946429.png',
                 iconSize: [30, 30],
                 iconAnchor: [15, 30],
                 popupAnchor: [0, -30]
@@ -189,16 +202,26 @@
 
             let currentIndex = 0;
             let fraction = 0;
-            const speed = 0.05; // 5% per step
+            const speed = 0.05;
 
-            function interpolate(p1, p2, fraction) {
-                return [
-                    p1[0] + (p2[0] - p1[0]) * fraction,
-                    p1[1] + (p2[1] - p1[1]) * fraction
-                ];
+            async function getNewEscapePath(currentRoom, currentFireRooms) {
+                const response = await fetch('/recalculate_path', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start: currentRoom,
+                        fire_rooms: currentFireRooms
+                    })
+                });
+                const data = await response.json();
+                const newCoords = data.path.map(room => {
+                    const [r, c] = roomPositions[room];
+                    return gridToMap(r, c);
+                });
+                return { coords: newCoords, rooms: data.path };
             }
 
-            function smoothMove() {
+            async function smoothMove() {
                 if (currentIndex < pathCoords.length - 1) {
                     const from = pathCoords[currentIndex];
                     const to = pathCoords[currentIndex + 1];
@@ -211,16 +234,86 @@
                     if (fraction >= 1) {
                         fraction = 0;
                         currentIndex++;
+
+                        const nextRoom = pathRooms[currentIndex];
+                        if (currentFireRooms.includes(nextRoom)) {
+                            console.log("🔥 Fire blocks path at " + nextRoom);
+
+                            const newPathData = await getNewEscapePath(nextRoom, currentFireRooms);
+                            pathCoords = newPathData.coords;
+                            pathRooms = newPathData.rooms;
+                            currentIndex = 0;
+                            movingMarker.setLatLng(pathCoords[0]);
+
+                            if (escapePolyline) {
+                                map.removeLayer(escapePolyline);
+                            }
+                            escapePolyline = L.polyline(pathCoords, {
+                                color: '#00FF00',
+                                weight: 8,
+                                opacity: 0.9,
+                                className: 'glow-line'
+                            }).addTo(map);
+
+                            map.fitBounds(pathCoords);
+                        }
                     }
 
-                    setTimeout(smoothMove, 200); // smooth step every 200ms
+                    setTimeout(smoothMove, 200);
                 } else {
                     movingMarker.bindPopup("✅ You have reached the exit!").openPopup();
                 }
             }
 
+            function interpolate(p1, p2, fraction) {
+                return [
+                    p1[0] + (p2[0] - p1[0]) * fraction,
+                    p1[1] + (p2[1] - p1[1]) * fraction
+                ];
+            }
+
             smoothMove();
         }
+
+        // 🔥 Fire Spreading
+        function spreadFire() {
+            if (currentFireRooms.length === 0) return;
+
+            const randomIndex = Math.floor(Math.random() * currentFireRooms.length);
+            const baseRoom = currentFireRooms[randomIndex];
+            const [r, c] = roomPositions[baseRoom];
+
+            const neighborOffsets = [
+                [-1, 0], [1, 0], [0, -1], [0, 1]
+            ];
+
+            for (const [dr, dc] of neighborOffsets) {
+                const nr = r + dr;
+                const nc = c + dc;
+
+                const neighbor = Object.keys(roomPositions).find(room => {
+                    const [rr, cc] = roomPositions[room];
+                    return rr === nr && cc === nc;
+                });
+
+                if (neighbor && !currentFireRooms.includes(neighbor)) {
+                    currentFireRooms.push(neighbor);
+
+                    const id = "label-" + neighbor.replace(/\s/g, '');
+                    const labelDiv = document.getElementById(id);
+                    if (labelDiv) {
+                        labelDiv.style.color = "red";
+                        labelDiv.innerHTML = `🔥 Fire: ${neighbor}`;
+                        labelDiv.style.transition = "all 0.5s ease";
+                    }
+                    console.log(`🔥 Fire spread to ${neighbor}`);
+                    break;
+                }
+            }
+        }
+
+        setInterval(spreadFire, 5000);
+
     </script>
 </body>
 

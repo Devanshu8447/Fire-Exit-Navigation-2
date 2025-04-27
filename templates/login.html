@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Login - Fire Force</title>
     <style>
@@ -9,7 +10,7 @@
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
+
         body {
             background-color: #f5f5f5;
             height: 100vh;
@@ -17,14 +18,14 @@
             align-items: center;
             overflow: hidden;
         }
-        
+
         .page-container {
             display: flex;
             width: 100%;
             justify-content: flex-end;
             padding-right: 8%;
         }
-        
+
         .login-container {
             width: 450px;
             background-color: white;
@@ -34,7 +35,7 @@
             position: relative;
             z-index: 2;
         }
-        
+
         .center-content {
             position: fixed;
             top: 50%;
@@ -44,14 +45,14 @@
             text-align: center;
             width: 40%;
         }
-        
+
         .fire-emoji {
             font-size: 150px;
             color: #ff4500;
             margin-bottom: 10px;
             opacity: 0.3;
         }
-        
+
         .center-text {
             font-size: 80px;
             font-weight: 800;
@@ -59,16 +60,16 @@
             opacity: 0.35;
             text-transform: uppercase;
             letter-spacing: 4px;
-            text-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
         }
-        
+
         h2 {
             color: #333;
             margin-bottom: 35px;
             font-weight: 500;
             font-size: 28px;
         }
-        
+
         input {
             width: 100%;
             padding: 16px 18px;
@@ -78,13 +79,13 @@
             font-size: 18px;
             transition: border-color 0.3s;
         }
-        
+
         input:focus {
             outline: none;
             border-color: #4285f4;
             box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
         }
-        
+
         button {
             width: 100%;
             padding: 16px;
@@ -97,31 +98,43 @@
             cursor: pointer;
             transition: background-color 0.3s;
         }
-        
+
         button:hover {
             background-color: #e55a2b;
         }
-        
+
         .error-message {
             color: #d93025;
             font-size: 16px;
             margin-top: 20px;
         }
-        
+
         .brand-text {
             font-size: 32px;
             font-weight: 600;
             margin-bottom: 15px;
             color: #ff6b35;
         }
+
+        .brand-text {
+            font-size: 60px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            color: #ff6b35;
+        }
+
+        .brand-text h2 {
+            font-weight: bolder;
+        }
     </style>
 </head>
+
 <body>
     <div class="center-content">
         <div class="fire-emoji">🔥</div>
         <div class="center-text">Fire Force</div>
     </div>
-    
+
     <div class="page-container">
         <div class="login-container">
             <div class="brand-text">Fire Force</div>
@@ -133,10 +146,11 @@
             </form>
             <div class="error-message">
                 {% if error %}
-                    {{ error }}
+                {{ error }}
                 {% endif %}
             </div>
         </div>
     </div>
 </body>
+
 </html>
